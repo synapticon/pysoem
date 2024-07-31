@@ -1,5 +1,6 @@
-__version__ = '1.1.8-wip'
+__version__ = '1.1.8'
 
+from pysoem.pysoem import ec_datatype
 
 # Classes:
 from pysoem.pysoem import (
