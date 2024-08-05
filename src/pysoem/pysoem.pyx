@@ -584,6 +584,18 @@ class WkcError(Exception):
         self.message = message
         self.wkc = wkc
 
+class FoEError(Exception):
+    """FoE error.
+
+    Attributes:
+        message (str): error message
+        error_code (int): Error code
+    """
+
+    def __init__(self, message=None, error_code=None):
+        self.message = message
+        self.error_code = error_code
+
 
 cdef class _CallbackData:
     cdef:
@@ -885,13 +897,17 @@ cdef class CdefSlave:
 
         cdef int result = cpysoem.ecx_FOEread(self._ecx_contextt, self._pos, filename.encode('utf8'), password, &size_inout, pbuf, timeout)
 
-        # error handling
+        # Workaround, because SOEM returns FoE error code as wkc, and does not use a function to push
+        # error on error stack. Hence ecx_poperror will not find any error.
+        if result < 0:
+            PyMem_Free(pbuf)
+            raise FoEError(error_code=result, message="FoE read error")
+
         cdef cpysoem.ec_errort err
         if cpysoem.ecx_poperror(self._ecx_contextt, &err):
             PyMem_Free(pbuf)
             assert err.Slave == self._pos
             self._raise_exception(&err)
-
         # return data
         try:
             return PyBytes_FromStringAndSize(<char*>pbuf, size_inout)
