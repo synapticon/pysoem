@@ -75,6 +75,26 @@ Using `this pysoem chat room on gitter <https://gitter.im/pysoem/pysoem>`_ is on
 Changes
 -------
 
+v1.1.11
+^^^^^^^
+* Adds No-GIL support.
+
+  * Per global setting ``pysoem.settings.always_release_gil``.
+  * Per Master instance attribute ``always_release_gil``.
+  * Per function argument ``release_gil``.
+
+v1.1.10
+^^^^^^^
+* Adds ``pysoem.settings.timeouts`` to configure low-level timeouts at run-time.
+
+v1.1.9
+^^^^^^^
+* Adds protection against closed network interface connection.
+
+v1.1.8
+^^^^^^^
+* Fixes null pointer issues when reading not initialized properties ``config_func`` and ``setup_func``.
+
 v1.1.7
 ^^^^^^^
 * Adds ``add_emergency_callback()`` to allow a better handling of emergency messages.
