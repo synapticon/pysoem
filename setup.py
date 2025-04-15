@@ -26,7 +26,7 @@ if sys.platform.startswith('win'):
 elif sys.platform.startswith('linux'):
     soem_macros = []
     soem_lib_dirs = []
-    soem_libs = ['pthread', 'rt'] 
+    soem_libs = ['pthread', 'rt']
     os_name = 'linux'
 elif sys.platform.startswith('darwin'):
     soem_macros = []
@@ -35,6 +35,7 @@ elif sys.platform.startswith('darwin'):
     os_name = 'macosx'
 
 soem_macros.append(('EC_VER2', ''))
+soem_macros.append(('USE_SOEM_CONFIG_H', ''))
 
 soem_sources.extend([os.path.join('.', 'soem', 'osal', os_name, 'osal.c'),
                      os.path.join('.', 'soem', 'oshw', os_name, 'oshw.c'),
@@ -46,13 +47,15 @@ soem_sources.extend([os.path.join('.', 'soem', 'osal', os_name, 'osal.c'),
                      os.path.join('.', 'soem', 'soem', 'ethercatfoe.c'),
                      os.path.join('.', 'soem', 'soem', 'ethercatmain.c'),
                      os.path.join('.', 'soem', 'soem', 'ethercatprint.c'),
-                     os.path.join('.', 'soem', 'soem', 'ethercatsoe.c')])
+                     os.path.join('.', 'soem', 'soem', 'ethercatsoe.c'),
+                     os.path.join('.', 'src', 'soem', 'soem_config.c')])
 
 soem_inc_dirs.extend([os.path.join('.', 'soem', 'oshw', os_name),
                       os.path.join('.', 'soem', 'osal', os_name),
                       os.path.join('.', 'soem', 'oshw'),
                       os.path.join('.', 'soem', 'osal'),
-                      os.path.join('.', 'soem', 'soem')])
+                      os.path.join('.', 'soem', 'soem'),
+                      os.path.join('.', 'src', 'soem')])
 
 
 def readme():
@@ -60,7 +63,7 @@ def readme():
     with open('README.rst') as f:
         return f.read()
 
-        
+
 here = os.path.abspath(os.path.dirname(__file__))
 
 

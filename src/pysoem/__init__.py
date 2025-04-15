@@ -1,4 +1,4 @@
-__version__ = '1.1.8'
+__version__ = '1.1.11'
 
 from pysoem.pysoem import ec_datatype
 
@@ -13,6 +13,7 @@ from pysoem.pysoem import (
     ConfigMapError,
     EepromError,
     WkcError,
+    NetworkInterfaceNotOpenError,
     SiiOffset,
 )
 
@@ -82,4 +83,9 @@ from pysoem.pysoem import (
     CdefMaster,
     CdefSlave,
     CdefCoeObjectEntry,
+)
+
+# Settings:
+from pysoem.pysoem import (
+    settings
 )
