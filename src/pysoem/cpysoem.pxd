@@ -88,14 +88,15 @@ cdef extern from "ethercat.h":
         uint16  w2
 
     # from soem_config.h
-    ctypedef struct Ttimeouts:
-        int ret
-        int safe
-        int eeprom
-        int tx_mailbox
-        int rx_mailbox
-        int state
-    extern Ttimeouts soem_timeouts;
+    # Timeout structure not available in this SOEM version
+    # ctypedef struct Ttimeouts:
+    #     int ret
+    #     int safe
+    #     int eeprom
+    #     int tx_mailbox
+    #     int rx_mailbox
+    #     int state
+    # extern Ttimeouts soem_timeouts;
 
     # from nicdrv.h
         
@@ -205,9 +206,8 @@ cdef extern from "ethercat.h":
         uint8            group
         uint8            FMMUunused
         boolean          islost
-        int              (*PO2SOconfig)(uint16 slave, void* user)
+        int              (*PO2SOconfig)(uint16 slave)
         int              (*PO2SOconfigx)(ecx_contextt* context, uint16 slave)
-        void*            user
         char             *name #[EC_MAXNAME + 1]
     
     ctypedef struct ec_groupt:

@@ -32,6 +32,9 @@ from cpython.ref cimport Py_INCREF, Py_DECREF
 
 logger = logging.getLogger(__name__)
 
+# Global mapping from slave numbers to callback data (replaces the missing 'user' field)
+cdef dict _slave_callback_data = {}
+
 NONE_STATE = cpysoem.EC_STATE_NONE
 INIT_STATE = cpysoem.EC_STATE_INIT
 PREOP_STATE = cpysoem.EC_STATE_PRE_OP
@@ -54,64 +57,26 @@ ECT_COEDET_PDOCONFIG = 0x08
 ECT_COEDET_UPLOAD    = 0x10
 ECT_COEDET_SDOCA     = 0x20
 
-cdef class CdefTimeouts:
+# Timeout configuration not available in this SOEM version
+# cdef class CdefTimeouts:
+#     cdef cpysoem.Ttimeouts* _t
+#     def __cinit__(self):
+#         self._t = &cpysoem.soem_timeouts
+#     # ... rest of timeout properties commented out
 
-    cdef cpysoem.Ttimeouts* _t
-
-    def __cinit__(self):
-        self._t = &cpysoem.soem_timeouts
-
-    @property
-    def ret(self) -> int:
-        return self._t.ret
-
-    @ret.setter
-    def ret(self, value: int):
-        self._t.ret = value
-
-    @property
-    def safe(self) -> int:
-        return self._t.safe
-
-    @safe.setter
-    def safe(self, value: int):
-        self._t.safe = value
-
-    @property
-    def eeprom(self) -> int:
-        return self._t.eeprom
-
-    @eeprom.setter
-    def eeprom(self, value: int):
-        self._t.eeprom = value
-
-    @property
-    def tx_mailbox(self) -> int:
-        return self._t.tx_mailbox
-
-    @tx_mailbox.setter
-    def tx_mailbox(self, value: int):
-        self._t.tx_mailbox = value
-
-    @property
-    def rx_mailbox(self) -> int:
-        return self._t.rx_mailbox
-
-    @rx_mailbox.setter
-    def rx_mailbox(self, value: int):
-        self._t.rx_mailbox = value
-
-    @property
-    def state(self) -> int:
-        return self._t.state
-
-    @state.setter
-    def state(self, value: int):
-        self._t.state = value
+class CdefTimeouts:
+    """Dummy timeout class for compatibility."""
+    def __init__(self):
+        self.ret = 2000
+        self.safe = 20000
+        self.eeprom = 20000
+        self.tx_mailbox = 20000
+        self.rx_mailbox = 700000
+        self.state = 2000000
 
 cdef class CdefSettings:
 
-    cdef public CdefTimeouts timeouts
+    cdef public object timeouts  # Changed from CdefTimeouts to object
     cdef public cpysoem.boolean always_release_gil
 
     def __init__(self):
@@ -1373,12 +1338,12 @@ cdef class CdefSlave:
         
     def _get_PO2SOconfig(self):
         """Slaves callback function that is called during config_map.
-        
+
         When the state changes from Pre-Operational state to Operational state."""
-        if not self._ec_slave.user:
+        if self._pos not in _slave_callback_data:
             return None
 
-        return <object>self._ec_slave.user
+        return _slave_callback_data[self._pos].func
 
     def _get_PO2SOconfigEx(self):
         """Alternative callback function that is called during config_map.
@@ -1388,24 +1353,28 @@ cdef class CdefSlave:
 
         .. versionadded:: 1.1.0
         """
-        if not self._ec_slave.user:
+        if self._pos not in _slave_callback_data:
             return None
 
-        return <object>self._ec_slave.user
-    
+        return _slave_callback_data[self._pos].func
+
     def _set_PO2SOconfig(self, value):
         self._cd.func = value
-        self._ec_slave.user = <void*>self._cd
+        _slave_callback_data[self._pos] = self._cd
         if value is None:
             self._ec_slave.PO2SOconfig = NULL
+            if self._pos in _slave_callback_data:
+                del _slave_callback_data[self._pos]
         else:
             self._ec_slave.PO2SOconfig = _xPO2SOconfig
 
     def _set_PO2SOconfigEx(self, value):
         self._cd.func = value
-        self._ec_slave.user = <void*>self._cd
+        _slave_callback_data[self._pos] = self._cd
         if value is None:
             self._ec_slave.PO2SOconfig = NULL
+            if self._pos in _slave_callback_data:
+                del _slave_callback_data[self._pos]
         else:
             self._ec_slave.PO2SOconfig = _xPO2SOconfigEx
 
@@ -1575,9 +1544,11 @@ cdef class CdefCoeObjectEntry:
         return self._ex_oelist.ObjAccess[self._item]
         
 
-cdef int _xPO2SOconfig(cpysoem.uint16 slave, void* user) noexcept:
+cdef int _xPO2SOconfig(cpysoem.uint16 slave) noexcept:
     cdef _CallbackData cd
-    cd = <object>user
+    if slave not in _slave_callback_data:
+        return 0
+    cd = _slave_callback_data[slave]
     cd.exc_raised = False
     try:
         (<object>cd.func)(slave-1)
@@ -1586,9 +1557,11 @@ cdef int _xPO2SOconfig(cpysoem.uint16 slave, void* user) noexcept:
         cd.exc_info = sys.exc_info()
 
 
-cdef int _xPO2SOconfigEx(cpysoem.uint16 slave, void* user) noexcept:
+cdef int _xPO2SOconfigEx(cpysoem.uint16 slave) noexcept:
     cdef _CallbackData cd
-    cd = <object>user
+    if slave not in _slave_callback_data:
+        return 0
+    cd = _slave_callback_data[slave]
     cd.exc_raised = False
     try:
         (<object>cd.func)(cd.slave)
