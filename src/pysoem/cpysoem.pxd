@@ -17,12 +17,18 @@
 
 from libc.stdint cimport int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t
 
-cdef extern from "ethercat.h":
+cdef extern from "soem.h":
     
     cdef enum:
         EC_MAXBUF = 16
         EC_MAXMBX = 1486
         EC_BUFSIZE = 1518
+        EC_MAXLEN_ADAPTERNAME = 128
+        EC_MAXSLAVE = 200
+        EC_MAXGROUP = 2
+        EC_MAXEEPBUF = 4096
+        EC_MAXEEPBITMAP = 128
+        EC_MAX_MAPT = 1
     
     ec_adaptert* ec_find_adapters()
         
@@ -87,15 +93,8 @@ cdef extern from "ethercat.h":
         uint16  w1
         uint16  w2
 
-    # from soem_config.h
-    ctypedef struct Ttimeouts:
-        int ret
-        int safe
-        int eeprom
-        int tx_mailbox
-        int rx_mailbox
-        int state
-    extern Ttimeouts soem_timeouts;
+    # Note: Timeout configuration is now compile-time only in SOEM 2.0.0
+    # See ec_options.h for timeout constants
 
     # from nicdrv.h
         
@@ -122,8 +121,8 @@ cdef extern from "ethercat.h":
     # from eethercatmain.h
     
     ctypedef struct ec_adaptert:
-        char* name
-        char* desc
+        char name[EC_MAXLEN_ADAPTERNAME]
+        char desc[EC_MAXLEN_ADAPTERNAME]
         ec_adaptert* next
         
     ctypedef struct ec_fmmut:
@@ -151,14 +150,17 @@ cdef extern from "ethercat.h":
         uint32           eep_man
         uint32           eep_id
         uint32           eep_rev
+        uint32           eep_ser
         uint16           Itype
         uint16           Dtype
         uint16           Obits
         uint32           Obytes
+        uint32           Ooffset
         uint8            *outputs
         uint8            Ostartbit
         uint16           Ibits
         uint32           Ibytes
+        uint32           Ioffset
         uint8            *inputs
         uint8            Istartbit
         ec_smt           *SM #[EC_MAXSM]
@@ -192,7 +194,6 @@ cdef extern from "ethercat.h":
         int32            DCcycle
         int32            DCshift
         uint8            DCactive
-        uint16           configindex
         uint16           SIIindex
         uint8            eep_8byte
         uint8            eep_pdi
@@ -205,8 +206,7 @@ cdef extern from "ethercat.h":
         uint8            group
         uint8            FMMUunused
         boolean          islost
-        int              (*PO2SOconfig)(uint16 slave, void* user)
-        int              (*PO2SOconfigx)(ecx_contextt* context, uint16 slave)
+        int              (*PO2SOconfig)(ecx_contextt* context, uint16 slave)
         void*            user
         char             *name #[EC_MAXNAME + 1]
     
@@ -274,27 +274,29 @@ cdef extern from "ethercat.h":
         uint8   FMMU3
     
     ctypedef struct ecx_contextt:
-        ecx_portt     *port
-        ec_slavet      *slavelist
-        int            *slavecount
-        int            maxslave
-        ec_groupt      *grouplist
-        int            maxgroup
-        uint8          *esibuf
-        uint32         *esimap
+        # Network state
+        ecx_portt      port
+        ec_slavet      slavelist[EC_MAXSLAVE]
+        int            slavecount
+        ec_groupt      grouplist[EC_MAXGROUP]
+        boolean        ecaterror
+        int64          DCtime
+        # Internal state
+        uint8          esibuf[EC_MAXEEPBUF]
+        uint32         esimap[EC_MAXEEPBITMAP]
         uint16         esislave
-        ec_eringt      *elist
-        ec_idxstackT   *idxstack
-        boolean        *ecaterror
-        int64          *DCtime
-        ec_SMcommtypet *SMcommtype
-        ec_PDOassignt  *PDOassign
-        ec_PDOdesct    *PDOdesc
-        ec_eepromSMt   *eepSM
-        ec_eepromFMMUt *eepFMMU
+        ec_eringt      elist
+        ec_idxstackT   idxstack
+        ec_SMcommtypet SMcommtype[EC_MAX_MAPT]
+        ec_PDOassignt  PDOassign[EC_MAX_MAPT]
+        ec_PDOdesct    PDOdesc[EC_MAX_MAPT]
+        ec_eepromSMt   eepSM
+        ec_eepromFMMUt eepFMMU
+        # Configurable settings
         int            (*FOEhook)(uint16 slave, int packetnumber, int datasize)
         int            (*EOEhook)(ecx_contextt* context, uint16 slave, void* eoembx)
         int            manualstatechange
+        void           *userdata
         
     ctypedef struct ec_ODlistt:
         uint16  Slave
@@ -317,7 +319,6 @@ cdef extern from "ethercat.h":
     int ecx_init_redundant(ecx_contextt *context, ecx_redportt *redport, const char *ifname, char *if2name)
     void ecx_close(ecx_contextt *context)
     int ecx_config_map_group(ecx_contextt *context, void *pIOmap, uint8 group)
-    int ecx_config_overlap_map_group(ecx_contextt *context, void *pIOmap, uint8 group)
     int ecx_readODlist(ecx_contextt *context, uint16 Slave, ec_ODlistt *pODlist)
     int ecx_readODdescription(ecx_contextt *context, uint16 Item, ec_ODlistt *pODlist)
     int ecx_readOE(ecx_contextt *context, uint16 Item, ec_ODlistt *pODlist, ec_OElistt *pOElist)
@@ -326,12 +327,11 @@ cdef extern from "ethercat.h":
     int ecx_writestate(ecx_contextt *context, uint16 slave)
     uint16 ecx_statecheck(ecx_contextt *context, uint16 slave, uint16 reqstate, int timeout)
     
-    int ecx_send_overlap_processdata(ecx_contextt *context)
     
     int ecx_recover_slave(ecx_contextt *context, uint16 slave, int timeout)
     int ecx_reconfig_slave(ecx_contextt *context, uint16 slave, int timeout)
 
-    int ecx_mbxreceive(ecx_contextt *context, uint16 slave, ec_mbxbuft *mbx, int timeout)
+    int ecx_mbxreceive(ecx_contextt *context, uint16 slave, ec_mbxbuft **mbx, int timeout)
     void ec_clearmbx(ec_mbxbuft *Mbx)
     boolean ecx_poperror(ecx_contextt *context, ec_errort *Ec)
     const char* ec_sdoerror2string(uint32 sdoerrorcode)
@@ -349,8 +349,8 @@ cdef extern from "ethercat.h":
     int ecx_FPWR(ecx_portt *port, uint16 ADP, uint16 ADO, uint16 length, void *data, int timeout)
     int ecx_FPRD(ecx_portt *port, uint16 ADP, uint16 ADO, uint16 length, void *data, int timeout)
 
-cdef extern from "ethercat.h" nogil:
-    int ecx_config_init(ecx_contextt *context, uint8 usetable)
+cdef extern from "soem.h" nogil:
+    int ecx_config_init(ecx_contextt *context)
     int ecx_send_processdata(ecx_contextt *context)
     int ecx_receive_processdata(ecx_contextt *context, int timeout)
     int ecx_FOEwrite(ecx_contextt *context, uint16 slave, char *filename, uint32 password, int psize, void *p, int timeout)

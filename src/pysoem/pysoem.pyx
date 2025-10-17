@@ -54,68 +54,15 @@ ECT_COEDET_PDOCONFIG = 0x08
 ECT_COEDET_UPLOAD    = 0x10
 ECT_COEDET_SDOCA     = 0x20
 
-cdef class CdefTimeouts:
-
-    cdef cpysoem.Ttimeouts* _t
-
-    def __cinit__(self):
-        self._t = &cpysoem.soem_timeouts
-
-    @property
-    def ret(self) -> int:
-        return self._t.ret
-
-    @ret.setter
-    def ret(self, value: int):
-        self._t.ret = value
-
-    @property
-    def safe(self) -> int:
-        return self._t.safe
-
-    @safe.setter
-    def safe(self, value: int):
-        self._t.safe = value
-
-    @property
-    def eeprom(self) -> int:
-        return self._t.eeprom
-
-    @eeprom.setter
-    def eeprom(self, value: int):
-        self._t.eeprom = value
-
-    @property
-    def tx_mailbox(self) -> int:
-        return self._t.tx_mailbox
-
-    @tx_mailbox.setter
-    def tx_mailbox(self, value: int):
-        self._t.tx_mailbox = value
-
-    @property
-    def rx_mailbox(self) -> int:
-        return self._t.rx_mailbox
-
-    @rx_mailbox.setter
-    def rx_mailbox(self, value: int):
-        self._t.rx_mailbox = value
-
-    @property
-    def state(self) -> int:
-        return self._t.state
-
-    @state.setter
-    def state(self, value: int):
-        self._t.state = value
+# Note: CdefTimeouts class has been removed in SOEM 2.0.0
+# Timeout values are now compile-time constants defined in ec_options.h
+# and cannot be modified at runtime.
 
 cdef class CdefSettings:
 
-    cdef public CdefTimeouts timeouts
     cdef public cpysoem.boolean always_release_gil
 
     def __init__(self):
-        self.timeouts = CdefTimeouts()
         self.always_release_gil = False
 
 settings = CdefSettings()
@@ -224,22 +171,8 @@ cdef class CdefMaster:
     cdef classes. For example you can add new attributes dynamically.
     """
 
-    cdef cpysoem.ec_slavet        _ec_slave[EC_MAXSLAVE]
-    cdef int                      _ec_slavecount
-    cdef cpysoem.ec_groupt        _ec_group[EC_MAXGROUP]
-    cdef cpysoem.uint8            _ec_esibuf[EC_MAXEEPBUF]
-    cdef cpysoem.uint32           _ec_esimap[EC_MAXEEPBITMAP]
-    cdef cpysoem.ec_eringt        _ec_elist
-    cdef cpysoem.ec_idxstackT     _ec_idxstack
-    cdef cpysoem.ec_SMcommtypet   _ec_SMcommtype[EC_MAXMAPT]
-    cdef cpysoem.ec_PDOassignt    _ec_PDOassign[EC_MAXMAPT]
-    cdef cpysoem.ec_PDOdesct      _ec_PDOdesc[EC_MAXMAPT]
-    cdef cpysoem.ec_eepromSMt     _ec_SM
-    cdef cpysoem.ec_eepromFMMUt   _ec_FMMU
-    cdef cpysoem.boolean          _EcatError
-    cdef cpysoem.int64            _ec_DCtime
-    cdef cpysoem.ecx_portt        _ecx_port
-    cdef cpysoem.ecx_redportt     _ecx_redport
+    # SOEM 2.0.0 note: Context structure now manages arrays internally
+    cdef cpysoem.ecx_redportt     _ecx_redport  # Still needed for redundant init
 
     cdef cpysoem.ecx_contextt _ecx_contextt
     cdef char io_map[EC_IOMAPSIZE]
@@ -255,27 +188,15 @@ cdef class CdefMaster:
     manual_state_change = property(_get_manual_state_change, _set_manual_state_change)
 
     def __cinit__(self):
-        self._ecx_contextt.port = &self._ecx_port
-        self._ecx_contextt.slavelist = &self._ec_slave[0]
-        self._ecx_contextt.slavecount = &self._ec_slavecount
-        self._ecx_contextt.maxslave = EC_MAXSLAVE
-        self._ecx_contextt.grouplist = &self._ec_group[0]
-        self._ecx_contextt.maxgroup = EC_MAXGROUP
-        self._ecx_contextt.esibuf = &self._ec_esibuf[0]
-        self._ecx_contextt.esimap = &self._ec_esimap[0]
+        # Initialize basic values - SOEM 2.0.0 manages internal arrays
+        self._ecx_contextt.slavecount = 0
+        self._ecx_contextt.ecaterror = 0
+        self._ecx_contextt.DCtime = 0
         self._ecx_contextt.esislave = 0
-        self._ecx_contextt.elist = &self._ec_elist
-        self._ecx_contextt.idxstack = &self._ec_idxstack
-        self._EcatError = 0
-        self._ecx_contextt.ecaterror = &self._EcatError
-        self._ecx_contextt.DCtime = &self._ec_DCtime
-        self._ecx_contextt.SMcommtype = &self._ec_SMcommtype[0]
-        self._ecx_contextt.PDOassign = &self._ec_PDOassign[0]
-        self._ecx_contextt.PDOdesc = &self._ec_PDOdesc[0]
-        self._ecx_contextt.eepSM = &self._ec_SM
-        self._ecx_contextt.eepFMMU = &self._ec_FMMU
         self._ecx_contextt.FOEhook = NULL
+        self._ecx_contextt.EOEhook = NULL
         self._ecx_contextt.manualstatechange = 0
+        self._ecx_contextt.userdata = NULL
         
         self.slaves = None
         self.sdo_read_timeout = 700000
@@ -321,13 +242,13 @@ cdef class CdefMaster:
         """Enumerate and init all slaves without GIL.
         
         Args:
-            usetable (uint8_t): True when using configtable to init slaves, False otherwise.
+            usetable (uint8_t): Deprecated parameter (ignored in SOEM 2.0.0).
         """
         cdef int ret_val
         
         Py_INCREF(self)
         with nogil:
-            ret_val = cpysoem.ecx_config_init(&self._ecx_contextt, usetable)
+            ret_val = cpysoem.ecx_config_init(&self._ecx_contextt)
         Py_DECREF(self)
         
         return ret_val
@@ -346,7 +267,7 @@ cdef class CdefMaster:
         """Enumerate and init all slaves.
         
         Args:
-            usetable (bool): True when using configtable to init slaves, False otherwise.
+            usetable (bool): Deprecated parameter (ignored in SOEM 2.0.0).
             release_gil (:obj:`bool`, optional): True to initialize the slaves releasing the GIL. Defaults to False.
         
         Returns:
@@ -360,10 +281,10 @@ cdef class CdefMaster:
         if release_gil:
             ret_val = self.__config_init_nogil(usetable)
         else:
-            ret_val = cpysoem.ecx_config_init(&self._ecx_contextt, usetable)
+            ret_val = cpysoem.ecx_config_init(&self._ecx_contextt)
 
         if ret_val > 0:
-          for i in range(self._ec_slavecount):
+          for i in range(self._ecx_contextt.slavecount):
               self.slaves.append(self._get_slave(i))
         return ret_val
         
@@ -398,14 +319,14 @@ cdef class CdefMaster:
         self.check_context_is_initialized()
         cdef _CallbackData cd
         # ecx_config_map_group returns the actual IO map size (not an error value), expect the value to be less than EC_IOMAPSIZE
-        ret_val = cpysoem.ecx_config_overlap_map_group(&self._ecx_contextt, &self.io_map, 0)
+        ret_val = cpysoem.ecx_config_map_group(&self._ecx_contextt, &self.io_map, 0)
         # check for exceptions raised in the config functions
         for slave in self.slaves:
             cd = slave._cd
             if cd.exc_raised:
                 raise cd.exc_info[0],cd.exc_info[1],cd.exc_info[2]
         logger.debug('io map size: {}'.format(ret_val))
-        # raise an exception if one or more mailbox errors occured within ecx_config_overlap_map_group call
+        # raise an exception if one or more mailbox errors occured within ecx_config_map_group call
         error_list = self._collect_mailbox_errors()
         if len(error_list) > 0:
             raise ConfigMapError(error_list)
@@ -527,7 +448,7 @@ cdef class CdefMaster:
             int: >0 if processdata is transmitted, might only by 0 if config map is not configured properly
         """
         self.check_context_is_initialized()
-        return cpysoem.ecx_send_overlap_processdata(&self._ecx_contextt)
+        return cpysoem.ecx_send_processdata(&self._ecx_contextt)
 
     cdef int __receive_processdata_nogil(self, int timeout):
         """Receive processdata from slaves without GIL.
@@ -566,12 +487,12 @@ cdef class CdefMaster:
     def _get_slave(self, int pos):
         if pos < 0:
             raise IndexError('requested slave device is not available')
-        if pos >= self._ec_slavecount:
+        if pos >= self._ecx_contextt.slavecount:
             raise IndexError('requested slave device is not available')
         ethercat_slave = CdefSlave(pos+1)
         ethercat_slave._master = self
         ethercat_slave._ecx_contextt = &self._ecx_contextt
-        ethercat_slave._ec_slave = &self._ec_slave[pos+1] # +1 as _ec_slave[0] is reserved
+        ethercat_slave._ec_slave = &self._ecx_contextt.slavelist[pos+1] # +1 as slavelist[0] is reserved
         ethercat_slave._the_masters_settings = &self._settings
         return ethercat_slave
         
@@ -580,20 +501,20 @@ cdef class CdefMaster:
 
         Make sure to call write_state(), once a new state for all slaves was set.
         """
-        return self._ec_slave[0].state
+        return self._ecx_contextt.slavelist[0].state
 
     def _set_state(self, value):
-        self._ec_slave[0].state = value
+        self._ecx_contextt.slavelist[0].state = value
     
     def _get_expected_wkc(self):
         """Calculates the expected Working Counter"""
-        return (self._ec_group[0].outputsWKC * 2) + self._ec_group[0].inputsWKC
+        return (self._ecx_contextt.grouplist[0].outputsWKC * 2) + self._ecx_contextt.grouplist[0].inputsWKC
     
     def _get_dc_time(self):
         """DC time in ns required to synchronize the EtherCAT cycle with SYNC0 cycles.
 
         Note EtherCAT cycle here means the call of send_processdata and receive_processdata."""
-        return self._ec_DCtime
+        return self._ecx_contextt.DCtime
     
     def _set_manual_state_change(self, int manual_state_change):
         """Set manualstatechange variable in context.
@@ -805,8 +726,9 @@ cdef class CdefSlave:
     man = property(_get_eep_man)
     id = property(_get_eep_id)
     rev = property(_get_eep_rev)
-    config_func = property(_get_PO2SOconfig, _set_PO2SOconfig)
-    setup_func = property(_get_PO2SOconfigEx, _set_PO2SOconfigEx)
+    # Note: Callback functionality disabled in SOEM 2.0.0 (user field removed)
+    # config_func = property(_get_PO2SOconfig, _set_PO2SOconfig)
+    # setup_func = property(_get_PO2SOconfigEx, _set_PO2SOconfigEx)
     state = property(_get_state, _set_state)
     input = property(_get_input)
     output = property(_get_output, _set_output)
@@ -994,8 +916,7 @@ cdef class CdefSlave:
         """
         self._master.check_context_is_initialized()
 
-        cdef cpysoem.ec_mbxbuft buf
-        cpysoem.ec_clearmbx(&buf)
+        cdef cpysoem.ec_mbxbuft* buf = NULL
         cdef int wkt = cpysoem.ecx_mbxreceive(self._ecx_contextt, self._pos, &buf, 0)
 
         cdef cpysoem.ec_errort err
@@ -1315,7 +1236,7 @@ cdef class CdefSlave:
         """Send and receive of the FPRD cmd primitive (Configured Address Physical Read)."""
         cdef unsigned char* data
         data = <unsigned char*>PyMem_Malloc(size)
-        cdef int wkc = cpysoem.ecx_FPRD(self._ecx_contextt.port, self._ec_slave.configadr, address, size, data, timeout_us)
+        cdef int wkc = cpysoem.ecx_FPRD(&self._ecx_contextt.port, self._ec_slave.configadr, address, size, data, timeout_us)
         if wkc != 1:
             PyMem_Free(data)
             raise WkcError()
@@ -1326,7 +1247,7 @@ cdef class CdefSlave:
 
     def _fpwr(self, int address, bytes data, timeout_us=2000):
         """Send and receive of the FPWR cmd primitive (Configured Address Physical Write)."""
-        cdef int wkc = cpysoem.ecx_FPWR(self._ecx_contextt.port, self._ec_slave.configadr, address, <int>len(data), <unsigned char*>data, timeout_us)
+        cdef int wkc = cpysoem.ecx_FPWR(&self._ecx_contextt.port, self._ec_slave.configadr, address, <int>len(data), <unsigned char*>data, timeout_us)
         if wkc != 1:
             raise WkcError()
 
@@ -1371,43 +1292,44 @@ cdef class CdefSlave:
         """Revision Number of the slave, read out from the slaves SII during config_init."""
         return self._ec_slave.eep_rev
         
-    def _get_PO2SOconfig(self):
-        """Slaves callback function that is called during config_map.
-        
-        When the state changes from Pre-Operational state to Operational state."""
-        if not self._ec_slave.user:
-            return None
+    # Note: Callback functionality disabled in SOEM 2.0.0 (user field removed)
+    # def _get_PO2SOconfig(self):
+    #     """Slaves callback function that is called during config_map.
+    #
+    #     When the state changes from Pre-Operational state to Operational state."""
+    #     if not self._ec_slave.user:
+    #         return None
 
-        return <object>self._ec_slave.user
+    #     return <object>self._ec_slave.user
 
-    def _get_PO2SOconfigEx(self):
-        """Alternative callback function that is called during config_map.
+    # def _get_PO2SOconfigEx(self):
+    #     """Alternative callback function that is called during config_map.
 
-        More precisely the function is called during the transition from Pre-Operational to Safe-Operational state.
-        Use this instead of the config_func. The difference is that the callbacks signature is fn(CdefSlave: slave).
+    #     More precisely the function is called during the transition from Pre-Operational to Safe-Operational state.
+    #     Use this instead of the config_func. The difference is that the callbacks signature is fn(CdefSlave: slave).
 
-        .. versionadded:: 1.1.0
-        """
-        if not self._ec_slave.user:
-            return None
+    #     .. versionadded:: 1.1.0
+    #     """
+    #     if not self._ec_slave.user:
+    #         return None
 
-        return <object>self._ec_slave.user
+    #     return <object>self._ec_slave.user
     
-    def _set_PO2SOconfig(self, value):
-        self._cd.func = value
-        self._ec_slave.user = <void*>self._cd
-        if value is None:
-            self._ec_slave.PO2SOconfig = NULL
-        else:
-            self._ec_slave.PO2SOconfig = _xPO2SOconfig
+    # def _set_PO2SOconfig(self, value):
+    #     self._cd.func = value
+    #     self._ec_slave.user = <void*>self._cd
+    #     if value is None:
+    #         self._ec_slave.PO2SOconfig = NULL
+    #     else:
+    #         self._ec_slave.PO2SOconfig = _xPO2SOconfig
 
-    def _set_PO2SOconfigEx(self, value):
-        self._cd.func = value
-        self._ec_slave.user = <void*>self._cd
-        if value is None:
-            self._ec_slave.PO2SOconfig = NULL
-        else:
-            self._ec_slave.PO2SOconfig = _xPO2SOconfigEx
+    # def _set_PO2SOconfigEx(self, value):
+    #     self._cd.func = value
+    #     self._ec_slave.user = <void*>self._cd
+    #     if value is None:
+    #         self._ec_slave.PO2SOconfig = NULL
+    #     else:
+    #         self._ec_slave.PO2SOconfig = _xPO2SOconfigEx
 
     def _get_state(self):
         """Request a new state.
@@ -1575,23 +1497,24 @@ cdef class CdefCoeObjectEntry:
         return self._ex_oelist.ObjAccess[self._item]
         
 
-cdef int _xPO2SOconfig(cpysoem.uint16 slave, void* user) noexcept:
-    cdef _CallbackData cd
-    cd = <object>user
-    cd.exc_raised = False
-    try:
-        (<object>cd.func)(slave-1)
-    except:
-        cd.exc_raised = True
-        cd.exc_info = sys.exc_info()
+# Note: Callback functionality disabled in SOEM 2.0.0 (user field removed)
+# cdef int _xPO2SOconfig(cpysoem.ecx_contextt* context, cpysoem.uint16 slave) noexcept:
+#     cdef _CallbackData cd
+#     cd = <object>context.slavelist[slave].user
+#     cd.exc_raised = False
+#     try:
+#         (<object>cd.func)(slave-1)
+#     except:
+#         cd.exc_raised = True
+#         cd.exc_info = sys.exc_info()
 
 
-cdef int _xPO2SOconfigEx(cpysoem.uint16 slave, void* user) noexcept:
-    cdef _CallbackData cd
-    cd = <object>user
-    cd.exc_raised = False
-    try:
-        (<object>cd.func)(cd.slave)
-    except:
-        cd.exc_raised = True
-        cd.exc_info = sys.exc_info()
+# cdef int _xPO2SOconfigEx(cpysoem.ecx_contextt* context, cpysoem.uint16 slave) noexcept:
+#     cdef _CallbackData cd
+#     cd = <object>context.slavelist[slave].user
+#     cd.exc_raised = False
+#     try:
+#         (<object>cd.func)(cd.slave)
+#     except:
+#         cd.exc_raised = True
+#         cd.exc_info = sys.exc_info()
