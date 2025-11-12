@@ -1,4 +1,4 @@
-__version__ = '1.1.11-1'
+__version__ = '2.0.0'
 
 from pysoem.pysoem import ec_datatype
 
